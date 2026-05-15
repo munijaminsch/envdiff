@@ -1,84 +1,79 @@
-"""Formatters for rendering CompareResult output."""
+"""Formatters for rendering comparison results and report summaries."""
 
-from __future__ import annotations
-
-from typing import Protocol
+from abc import ABC, abstractmethod
+from typing import Union
+import json
 
 from envdiff.comparator import CompareResult
+from envdiff.reporter import ReportSummary, build_summary
 
 
-class Formatter(Protocol):
-    def format(self, result: CompareResult, env_names: tuple[str, str]) -> str:
+class Formatter(ABC):
+    """Base class for all output formatters."""
+
+    @abstractmethod
+    def format(self, result: CompareResult, left_file: str = "left", right_file: str = "right") -> str:
         ...
 
 
-class TextFormatter:
-    """Renders a CompareResult as human-readable plain text."""
+class TextFormatter(Formatter):
+    """Renders comparison results as human-readable text."""
 
-    _TICK = "\u2713"
-    _CROSS = "\u2717"
+    def format(self, result: CompareResult, left_file: str = "left", right_file: str = "right") -> str:
+        summary = build_summary(result, left_file=left_file, right_file=right_file)
+        lines = []
 
-    def format(self, result: CompareResult, env_names: tuple[str, str]) -> str:
-        left, right = env_names
-        lines: list[str] = []
-
-        if not result.has_differences():
-            lines.append(f"{self._TICK} No differences found between '{left}' and '{right}'.")
+        if summary.is_clean:
+            lines.append(f"No differences found between {left_file} and {right_file}.")
             return "\n".join(lines)
 
-        lines.append(f"Comparing '{left}' <-> '{right}'")
-        lines.append("-" * 40)
+        lines.append(f"Comparing {left_file} <-> {right_file}")
+        lines.append(f"  Total keys : {summary.total_keys}")
+        lines.append(f"  Issues     : {summary.total_issues}")
+        lines.append("")
 
-        for key in sorted(result.missing_in_right):
-            lines.append(f"  {self._CROSS} MISSING IN {right.upper():<20} {key}")
+        if result.missing_in_right:
+            lines.append(f"Missing in {right_file}:")
+            for key in sorted(result.missing_in_right):
+                lines.append(f"  - {key}")
 
-        for key in sorted(result.missing_in_left):
-            lines.append(f"  {self._CROSS} MISSING IN {left.upper():<20} {key}")
+        if result.missing_in_left:
+            lines.append(f"Missing in {left_file}:")
+            for key in sorted(result.missing_in_left):
+                lines.append(f"  - {key}")
 
-        for diff in sorted(result.value_mismatches, key=lambda d: d.key):
-            lines.append(f"  ~ MISMATCH                        {diff.key}")
-            lines.append(f"      {left}: {diff.left_value!r}")
-            lines.append(f"      {right}: {diff.right_value!r}")
+        if result.mismatched:
+            lines.append("Value mismatches:")
+            for diff in sorted(result.mismatched, key=lambda d: d.key):
+                lines.append(f"  ~ {diff.key}")
+                lines.append(f"      {left_file}: {diff.left_value}")
+                lines.append(f"      {right_file}: {diff.right_value}")
 
-        lines.append("-" * 40)
-        total = (
-            len(result.missing_in_left)
-            + len(result.missing_in_right)
-            + len(result.value_mismatches)
-        )
-        lines.append(f"{total} issue(s) found.")
+        if summary.warnings:
+            lines.append("Warnings:")
+            for w in summary.warnings:
+                lines.append(f"  ! {w}")
+
         return "\n".join(lines)
 
 
-class JsonFormatter:
-    """Renders a CompareResult as a JSON string."""
+class JsonFormatter(Formatter):
+    """Renders comparison results as JSON, including a summary block."""
 
-    def format(self, result: CompareResult, env_names: tuple[str, str]) -> str:
-        import json
-
-        left, right = env_names
+    def format(self, result: CompareResult, left_file: str = "left", right_file: str = "right") -> str:
+        summary = build_summary(result, left_file=left_file, right_file=right_file)
         payload = {
-            "left": left,
-            "right": right,
+            "summary": summary.as_dict(),
             "missing_in_left": sorted(result.missing_in_left),
             "missing_in_right": sorted(result.missing_in_right),
-            "value_mismatches": [
+            "mismatched": [
                 {
                     "key": d.key,
                     "left_value": d.left_value,
                     "right_value": d.right_value,
                 }
-                for d in sorted(result.value_mismatches, key=lambda d: d.key)
+                for d in sorted(result.mismatched, key=lambda d: d.key)
             ],
-            "has_differences": result.has_differences(),
+            "matching": sorted(result.matching),
         }
         return json.dumps(payload, indent=2)
-
-
-def get_formatter(fmt: str) -> TextFormatter | JsonFormatter:
-    """Return a formatter instance by name ('text' or 'json')."""
-    if fmt == "json":
-        return JsonFormatter()
-    if fmt == "text":
-        return TextFormatter()
-    raise ValueError(f"Unknown formatter: {fmt!r}. Choose 'text' or 'json'.")
