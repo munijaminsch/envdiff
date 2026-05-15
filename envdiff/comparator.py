@@ -1,4 +1,5 @@
-"""Compare parsed .env file dictionaries and report differences."""
+"""Compare parsed .env dictionaries and produce structured diff results."""
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -6,94 +7,92 @@ from typing import Dict, List, Optional
 
 @dataclass
 class KeyDiff:
-    """Represents a single key difference between two environments."""
-
     key: str
-    status: str  # 'missing_in_left', 'missing_in_right', 'value_mismatch'
-    left_value: Optional[str] = None
-    right_value: Optional[str] = None
+    status: str  # 'match' | 'mismatch' | 'missing_in_left' | 'missing_in_right'
+    left_value: Optional[str]
+    right_value: Optional[str]
 
-    def __str__(self) -> str:
-        if self.status == "missing_in_left":
-            return f"  - [{self.key}] missing in left (right={self.right_value!r})"
+    def __str__(self) -> str:  # noqa: D105
         if self.status == "missing_in_right":
-            return f"  - [{self.key}] missing in right (left={self.left_value!r})"
-        return (
-            f"  - [{self.key}] value mismatch "
-            f"(left={self.left_value!r}, right={self.right_value!r})"
-        )
+            return f"  - {self.key}: missing in right"
+        if self.status == "missing_in_left":
+            return f"  - {self.key}: missing in left"
+        if self.status == "mismatch":
+            return f"  ~ {self.key}: {self.left_value!r} != {self.right_value!r}"
+        return f"  = {self.key}: match"
 
 
 @dataclass
 class CompareResult:
-    """Aggregated result of comparing two .env files."""
-
-    left_name: str
-    right_name: str
+    left_file: str
+    right_file: str
     diffs: List[KeyDiff] = field(default_factory=list)
 
-    @property
     def has_differences(self) -> bool:
-        return len(self.diffs) > 0
+        """Return True if any diff is not a match."""
+        return any(d.status != "match" for d in self.diffs)
 
-    @property
     def missing_in_left(self) -> List[KeyDiff]:
+        """Keys present in right but absent in left."""
         return [d for d in self.diffs if d.status == "missing_in_left"]
 
-    @property
     def missing_in_right(self) -> List[KeyDiff]:
+        """Keys present in left but absent in right."""
         return [d for d in self.diffs if d.status == "missing_in_right"]
 
-    @property
-    def mismatched(self) -> List[KeyDiff]:
-        return [d for d in self.diffs if d.status == "value_mismatch"]
+    def mismatches(self) -> List[KeyDiff]:
+        """Keys present in both files but with differing values."""
+        return [d for d in self.diffs if d.status == "mismatch"]
 
-    def summary(self) -> str:
-        lines = [
-            f"Comparing '{self.left_name}' vs '{self.right_name}'",
-            f"  Missing in left  : {len(self.missing_in_left)}",
-            f"  Missing in right : {len(self.missing_in_right)}",
-            f"  Value mismatches : {len(self.mismatched)}",
-        ]
-        if self.diffs:
-            lines.append("Details:")
-            lines.extend(str(d) for d in self.diffs)
-        else:
-            lines.append("No differences found.")
-        return "\n".join(lines)
+    def matches(self) -> List[KeyDiff]:
+        """Keys present in both files with identical values."""
+        return [d for d in self.diffs if d.status == "match"]
 
 
-def compare_envs(
+def compare(
     left: Dict[str, str],
     right: Dict[str, str],
-    left_name: str = "left",
-    right_name: str = "right",
+    left_file: str = "left",
+    right_file: str = "right",
 ) -> CompareResult:
-    """Compare two env dictionaries and return a CompareResult."""
-    result = CompareResult(left_name=left_name, right_name=right_name)
-
+    """Compare two env dicts and return a CompareResult."""
     all_keys = sorted(set(left) | set(right))
+    diffs: List[KeyDiff] = []
 
     for key in all_keys:
         in_left = key in left
         in_right = key in right
 
-        if in_left and not in_right:
-            result.diffs.append(
-                KeyDiff(key=key, status="missing_in_right", left_value=left[key])
-            )
-        elif in_right and not in_left:
-            result.diffs.append(
-                KeyDiff(key=key, status="missing_in_left", right_value=right[key])
-            )
-        elif left[key] != right[key]:
-            result.diffs.append(
+        if in_left and in_right:
+            if left[key] == right[key]:
+                status = "match"
+            else:
+                status = "mismatch"
+            diffs.append(
                 KeyDiff(
                     key=key,
-                    status="value_mismatch",
+                    status=status,
                     left_value=left[key],
                     right_value=right[key],
                 )
             )
+        elif in_left:
+            diffs.append(
+                KeyDiff(
+                    key=key,
+                    status="missing_in_right",
+                    left_value=left[key],
+                    right_value=None,
+                )
+            )
+        else:
+            diffs.append(
+                KeyDiff(
+                    key=key,
+                    status="missing_in_left",
+                    left_value=None,
+                    right_value=right[key],
+                )
+            )
 
-    return result
+    return CompareResult(left_file=left_file, right_file=right_file, diffs=diffs)
