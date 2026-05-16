@@ -75,3 +75,13 @@ def test_env_names_in_text_output(env_dir, capsys):
     out = capsys.readouterr().out
     assert ".env.staging" in out
     assert ".env.production" in out
+
+
+def test_json_output_has_differences_true_when_values_differ(env_dir, capsys):
+    """Ensure has_differences is True when keys exist in both files but values differ."""
+    left = env_dir(".env.a", "KEY=foo\n")
+    right = env_dir(".env.b", "KEY=bar\n")
+    run([str(left), str(right), "--format", "json"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["has_differences"] is True
+    assert "KEY" in data["differing_values"]
