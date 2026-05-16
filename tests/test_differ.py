@@ -85,7 +85,16 @@ def test_diff_files_with_prefix_filter(env_dir):
 
 
 def test_diff_files_raises_diff_error_on_bad_file(env_dir):
-    missing = env_dir / "nonexistent.env"
+    """DiffError should be raised when one of the files does not exist."""
+    left = env_dir / ".env.missing"
     right = _write(env_dir, ".env.right", "KEY=value\n")
     with pytest.raises(DiffError):
-        diff_files(missing, right)
+        diff_files(left, right)
+
+
+def test_diff_files_raises_diff_error_on_both_bad_files(env_dir):
+    """DiffError should be raised when both files do not exist."""
+    left = env_dir / ".env.missing_left"
+    right = env_dir / ".env.missing_right"
+    with pytest.raises(DiffError):
+        diff_files(left, right)
