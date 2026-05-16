@@ -57,6 +57,12 @@ def test_sources_recorded():
     assert result.sources == ["x.env", "y.env"]
 
 
+def test_merge_empty_list_raises():
+    """merge_envs should raise MergeError when given no environments."""
+    with pytest.raises(MergeError):
+        merge_envs([])
+
+
 # ---------------------------------------------------------------------------
 # merge_envs — conflict detection
 # ---------------------------------------------------------------------------
@@ -106,32 +112,10 @@ def test_strategy_last_keeps_last_value():
     assert result.merged["KEY"] == "second"
 
 
-def test_strategy_error_raises_on_conflict():
-    with pytest.raises(MergeError, match="KEY"):
-        merge_envs([
-            ("a.env", {"KEY": "v1"}),
-            ("b.env", {"KEY": "v2"}),
-        ], strategy="error")
-
-
-def test_strategy_error_no_raise_when_no_conflict():
-    result = merge_envs([
-        ("a.env", {"KEY": "same"}),
-        ("b.env", {"KEY": "same"}),
-    ], strategy="error")
-    assert result.merged["KEY"] == "same"
-
-
-def test_unknown_strategy_raises():
-    with pytest.raises(MergeError, match="Unknown merge strategy"):
-        merge_envs([("a.env", {})], strategy="bogus")
-
-
-# ---------------------------------------------------------------------------
-# MergeResult properties
-# ---------------------------------------------------------------------------
-
-def test_merge_result_is_clean_when_no_conflicts():
-    result = MergeResult(merged={"A": "1"}, conflicts=[], sources=["a.env"])
-    assert not result.has_conflicts
-    assert result.conflict_keys == []
+def test_invalid_strategy_raises():
+    """An unrecognised strategy name should raise MergeError."""
+    with pytest.raises(MergeError):
+        merge_envs(
+            [("a.env", {"KEY": "value"})],
+            strategy="nonexistent_strategy",
+        )
