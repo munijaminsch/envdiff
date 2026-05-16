@@ -84,3 +84,22 @@ def sanitize(
         sanitized=sanitized,
         redacted_keys=sorted(redacted_keys),
     )
+
+
+def is_sensitive_key(
+    key: str,
+    extra_patterns: Optional[List[str]] = None,
+) -> bool:
+    """Return True if *key* matches any sensitive pattern.
+
+    Useful for checking individual keys without sanitizing a full mapping.
+
+    Args:
+        key: The environment variable name to check.
+        extra_patterns: Additional regex patterns to consider sensitive.
+    """
+    patterns = list(_DEFAULT_SENSITIVE_PATTERNS)
+    if extra_patterns:
+        patterns.extend(extra_patterns)
+    compiled = _compile_patterns(patterns)
+    return _is_sensitive(key, compiled)
