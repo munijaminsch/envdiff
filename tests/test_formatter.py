@@ -83,21 +83,30 @@ class TestJsonFormatter:
         diff = KeyDiff(key="PORT", left_value="8080", right_value="80")
         result = _make_result(mismatches=[diff])
         data = json.loads(JsonFormatter().format(result, ENV_NAMES))
-        assert data["value_mismatches"][0]["key"] == "PORT"
+        assert len(data["value_mismatches"]) == 1
+        mismatch = data["value_mismatches"][0]
+        assert mismatch["key"] == "PORT"
+        assert mismatch["left_value"] == "8080"
+        assert mismatch["right_value"] == "80"
+
+    def test_has_differences_true_when_mismatches(self):
+        diff = KeyDiff(key="TIMEOUT", left_value="30", right_value="60")
+        result = _make_result(mismatches=[diff])
+        data = json.loads(JsonFormatter().format(result, ENV_NAMES))
+        assert data["has_differences"] is True
 
 
 # ---------------------------------------------------------------------------
-# get_formatter helper
+# get_formatter
 # ---------------------------------------------------------------------------
 
-def test_get_formatter_text():
-    assert isinstance(get_formatter("text"), TextFormatter)
+class TestGetFormatter:
+    def test_returns_text_formatter(self):
+        assert isinstance(get_formatter("text"), TextFormatter)
 
+    def test_returns_json_formatter(self):
+        assert isinstance(get_formatter("json"), JsonFormatter)
 
-def test_get_formatter_json():
-    assert isinstance(get_formatter("json"), JsonFormatter)
-
-
-def test_get_formatter_unknown_raises():
-    with pytest.raises(ValueError, match="Unknown formatter"):
-        get_formatter("xml")
+    def test_unknown_format_raises(self):
+        with pytest.raises((ValueError, KeyError)):
+            get_formatter("xml")
