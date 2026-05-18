@@ -66,6 +66,14 @@ def test_original_is_preserved():
     assert result.original["DB_PASSWORD"] == "secret"
 
 
+def test_original_is_not_mutated_by_sanitize():
+    """Ensure sanitize() does not modify the original env dict passed in."""
+    env = _env(DB_PASSWORD="secret", HOST="localhost")
+    original_copy = dict(env)
+    sanitize(env)
+    assert env == original_copy
+
+
 def test_extra_patterns_redact_additional_keys():
     env = _env(INTERNAL_CERT="cert-data", HOST="localhost")
     result = sanitize(env, extra_patterns=[r"(?i)cert"])
