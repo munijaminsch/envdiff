@@ -71,3 +71,15 @@ def test_empty_key_raises_parse_error(tmp_env):
 def test_returns_dict_type(tmp_env):
     result = parse_env_file(tmp_env("A=1\n"))
     assert isinstance(result, dict)
+
+
+def test_inline_comment_stripped(tmp_env):
+    """Values should have inline comments stripped when unquoted."""
+    result = parse_env_file(tmp_env("HOST=localhost # the host\n"))
+    assert result["HOST"] == "localhost"
+
+
+def test_inline_comment_preserved_in_quoted_value(tmp_env):
+    """Inline comments inside quoted values should be preserved as part of the value."""
+    result = parse_env_file(tmp_env('MSG="hello # world"\n'))
+    assert result["MSG"] == "hello # world"
