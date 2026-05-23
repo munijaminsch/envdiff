@@ -44,6 +44,19 @@ class SnapshotDiff:
     def is_clean(self) -> bool:
         return not (self.added or self.removed or self.changed)
 
+    def summary(self) -> str:
+        """Return a human-readable one-line summary of the diff."""
+        if self.is_clean:
+            return "No changes detected."
+        parts = []
+        if self.added:
+            parts.append(f"{len(self.added)} added")
+        if self.removed:
+            parts.append(f"{len(self.removed)} removed")
+        if self.changed:
+            parts.append(f"{len(self.changed)} changed")
+        return ", ".join(parts) + "."
+
     def as_dict(self) -> dict:
         return {
             "added": dict(self.added),
