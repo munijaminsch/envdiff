@@ -54,6 +54,14 @@ class InvertResult:
             "entries": [e.as_dict() for e in self.entries],
         }
 
+    def to_dict(self) -> Dict[str, str]:
+        """Return the inverted mapping as a plain ``{new_key: new_value}`` dict.
+
+        Useful when you need to pass the result back to code that works with
+        ordinary environment dictionaries.
+        """
+        return {entry.new_key: entry.new_value for entry in self.entries}
+
 
 def invert_env(
     env: Dict[str, str],
